@@ -172,7 +172,7 @@ def load_coreml(path: Union[str, PathLike], tasks: Optional[Sequence[_T_tasks]] 
         from coremltools.models import MLModel
     except ImportError as e:
         raise ValueError('Loading legacy CoreML (.mlmodel) files requires the `coremltools` '
-                         'package. Install it with `pip install kraken[mlmodel]`.') from e
+                         'package. Install it with `pip install coremltools`.') from e
     finally:
         root_logger.setLevel(level)
     from google.protobuf.message import DecodeError

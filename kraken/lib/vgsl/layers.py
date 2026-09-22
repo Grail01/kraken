@@ -37,7 +37,7 @@ def _neural_network_pb2():
         from coremltools.proto import NeuralNetwork_pb2
     except ImportError as e:
         raise ImportError('Writing legacy CoreML (.mlmodel) files requires the '
-                          '`coremltools` package. Install it with `pip install kraken[mlmodel]`.') from e
+                          '`coremltools` package. Install it with `pip install coremltools`.') from e
     finally:
         root_logger.setLevel(level)
     return NeuralNetwork_pb2

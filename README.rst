@@ -69,6 +69,32 @@ install the `pdf` extras package for PyPi:
 
    $ pip install kraken[pdf]
 
+Windows
+-------
+
+``pip install kraken`` works on a stock Windows Python install; no WSL or
+manually-placed DLLs are required. ``kraken list``/``kraken get`` currently
+require UTF-8 mode to work around an encoding bug in the third-party
+``htrmopo`` package on non-UTF-8 locales:
+
+.. code-block:: console
+
+   $ set PYTHONUTF8=1
+   $ kraken get 10.5281/zenodo.10592716
+
+GPU support: the ``torch``/``torchvision`` wheels pulled in by a plain
+``pip install kraken`` are CPU-only. For CUDA acceleration, install a
+CUDA-enabled ``torch`` build matching kraken's constraint
+(``torch>=2.9.0,<=2.14``) from PyTorch's own index *after* installing kraken,
+picking the CUDA version matching your driver from
+`pytorch.org/get-started/locally <https://pytorch.org/get-started/locally/>`_,
+e.g. for CUDA 12.6:
+
+.. code-block:: console
+
+   $ pip install kraken
+   $ pip install --force-reinstall "torch<=2.14" --index-url https://download.pytorch.org/whl/cu126
+
 Finally you'll have to scrounge up a model to do the actual recognition of
 characters. To download the default model for printed French text and place it
 in the kraken directory for the current user:

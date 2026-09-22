@@ -54,7 +54,7 @@ def _import_coremltools():
         from google.protobuf.message import DecodeError
     except ImportError as e:
         raise ImportError('Reading/writing legacy CoreML (.mlmodel) files requires the '
-                          '`coremltools` package. Install it with `pip install kraken[mlmodel]`.') from e
+                          '`coremltools` package. Install it with `pip install coremltools`.') from e
     finally:
         root_logger.setLevel(level)
     return MLModel, datatypes, NeuralNetworkBuilder, DecodeError
