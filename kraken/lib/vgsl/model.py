@@ -23,7 +23,6 @@ from os import PathLike
 from typing import (Any, Callable, Iterable, Optional, Sequence, Union)
 
 import torch
-from google.protobuf.message import DecodeError
 from torch import nn
 from lightning.fabric import Fabric
 
@@ -35,12 +34,30 @@ from kraken.configs import Config, RecognitionInferenceConfig, SegmentationInfer
 from kraken.lib.codec import PytorchCodec
 from kraken.lib.exceptions import KrakenInvalidModelException
 
-root_logger = logging.getLogger()
-level = root_logger.getEffectiveLevel()
-root_logger.setLevel(logging.ERROR)
-from coremltools.models import MLModel, datatypes  # NOQA
-from coremltools.models.neural_network import NeuralNetworkBuilder  # NOQA
-root_logger.setLevel(level)
+# coremltools is only needed by the deprecated CoreML load_model/save_model
+# methods below; it is imported lazily there so that kraken.lib.vgsl (used by
+# every recognition/segmentation model, including safetensors-only ones) does
+# not require it to be installed. See _import_coremltools().
+
+
+def _import_coremltools():
+    """
+    Lazily imports the coremltools bits needed for legacy CoreML (.mlmodel)
+    (de)serialization, suppressing its noisy import-time logging.
+    """
+    root_logger = logging.getLogger()
+    level = root_logger.getEffectiveLevel()
+    root_logger.setLevel(logging.ERROR)
+    try:
+        from coremltools.models import MLModel, datatypes
+        from coremltools.models.neural_network import NeuralNetworkBuilder
+        from google.protobuf.message import DecodeError
+    except ImportError as e:
+        raise ImportError('Reading/writing legacy CoreML (.mlmodel) files requires the '
+                          '`coremltools` package. Install it with `pip install kraken[mlmodel]`.') from e
+    finally:
+        root_logger.setLevel(level)
+    return MLModel, datatypes, NeuralNetworkBuilder, DecodeError
 
 # all tensors are ordered NCHW, the "feature" dimension is C, so the output of
 # an LSTM will be put into C same as the filters of a CNN.
@@ -286,6 +303,8 @@ class TorchVGSLModel(nn.Module,
         warnings.warn('`TorchVGSLModel.load_model` is deprecated and will be removed with kraken 8. Use `kraken.registry.load_model` instead.',
                       DeprecationWarning)
 
+        MLModel, datatypes, NeuralNetworkBuilder, DecodeError = _import_coremltools()
+
         if isinstance(path, PathLike):
             path = path.as_posix()
         try:
@@ -406,6 +425,7 @@ class TorchVGSLModel(nn.Module,
         """
         warnings.warn('`TorchVGSLModel.save_model` is deprecated and will be removed '
                       'with kraken 8. Use `kraken.models.write_models` instead.', DeprecationWarning)
+        MLModel, datatypes, NeuralNetworkBuilder, DecodeError = _import_coremltools()
         inputs = [('input', datatypes.Array(*self.input))]
         outputs = [('output', datatypes.Array(*self.output))]
         net_builder = NeuralNetworkBuilder(inputs, outputs)

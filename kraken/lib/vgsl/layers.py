@@ -24,11 +24,23 @@ from torch.nn import Module, Sequential
 from torch.nn import functional as F
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
-root_logger = logging.getLogger()
-level = root_logger.getEffectiveLevel()
-root_logger.setLevel(logging.ERROR)
-from coremltools.proto import NeuralNetwork_pb2  # NOQA
-root_logger.setLevel(level)
+# coremltools is only needed to serialize custom layers to legacy CoreML
+# (.mlmodel) format; imported lazily so plain inference/training does not
+# require it to be installed.
+
+
+def _neural_network_pb2():
+    root_logger = logging.getLogger()
+    level = root_logger.getEffectiveLevel()
+    root_logger.setLevel(logging.ERROR)
+    try:
+        from coremltools.proto import NeuralNetwork_pb2
+    except ImportError as e:
+        raise ImportError('Writing legacy CoreML (.mlmodel) files requires the '
+                          '`coremltools` package. Install it with `pip install kraken[mlmodel]`.') from e
+    finally:
+        root_logger.setLevel(level)
+    return NeuralNetwork_pb2
 
 # all tensors are ordered NCHW, the "feature" dimension is C, so the output of
 # an LSTM will be put into C same as the filters of a CNN.
@@ -227,7 +239,7 @@ class Addition(Module):
         pass
 
     def serialize(self, name, input, builder):
-        params = NeuralNetwork_pb2.CustomLayerParams()
+        params = _neural_network_pb2().CustomLayerParams()
         params.className = 'addition'
         params.description = 'An addition layer'
         params.parameters['dim'].intValue = self.dim
@@ -272,7 +284,7 @@ class Identity(Module):
         pass
 
     def serialize(self, name, input, builder):
-        params = NeuralNetwork_pb2.CustomLayerParams()
+        params = _neural_network_pb2().CustomLayerParams()
         params.className = 'identity'
         params.description = 'An identity layer'
         builder.add_custom(name,
@@ -348,7 +360,7 @@ class Reshape(Module):
         pass
 
     def serialize(self, name: str, input: str, builder) -> str:
-        params = NeuralNetwork_pb2.CustomLayerParams()
+        params = _neural_network_pb2().CustomLayerParams()
         params.className = 'reshape'
         params.description = 'A generalized reshape layer'
         params.parameters['src_dim'].intValue = self.src_dim
@@ -447,7 +459,7 @@ class Dropout(Module):
         pass
 
     def serialize(self, name, input, builder):
-        params = NeuralNetwork_pb2.CustomLayerParams()
+        params = _neural_network_pb2().CustomLayerParams()
         params.className = 'dropout'
         params.description = 'An n-dimensional dropout layer'
         params.parameters['dim'].intValue = self.dim
@@ -999,7 +1011,7 @@ class GroupNorm(Module):
         """
         Serializes the module using a NeuralNetworkBuilder.
         """
-        params = NeuralNetwork_pb2.CustomLayerParams()
+        params = _neural_network_pb2().CustomLayerParams()
         params.className = 'groupnorm'
         params.description = 'A Group Normalization layer'
         params.parameters['in_channels'].intValue = self.in_channels
