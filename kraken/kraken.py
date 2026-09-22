@@ -362,39 +362,54 @@ def process_pipeline(subcommands, input, batch_input, suffix, verbose, format_ty
 
     # parse pdfs
     if format_type == 'pdf':
-        import pyvips
+        import pypdfium2 as pdfium
 
         if not batch_input:
             logger.warning('PDF inputs not added with batch option. Manual output filename will be ignored and `-o` utilized.')
         new_input = []
         num_pages = 0
+        page_counts: dict = {}
         for (fpath, _) in input:
-            doc = pyvips.Image.new_from_file(fpath, dpi=300, n=-1, access="sequential")
-            if 'n-pages' in doc.get_fields():
-                num_pages += doc.get('n-pages')
+            try:
+                with pdfium.PdfDocument(fpath) as doc:
+                    page_counts[fpath] = len(doc)
+                    num_pages += len(doc)
+            except pdfium.PdfiumError:
+                # not a valid PDF; counted (and warned about) in the extraction pass below
+                page_counts[fpath] = 0
+
+        # dpi at which pages are rasterized; pdfium works in points (1/72in)
+        pdf_dpi = 300
+        pdf_scale = pdf_dpi / 72
 
         with KrakenProgressBar() as progress:
             pdf_parse_task = progress.add_task('Extracting PDF pages', total=num_pages, visible=True if not ctx.meta['verbose'] else False)
             for (fpath, _) in input:
+                n_pages = page_counts[fpath]
+                if n_pages == 0:
+                    logger.warning(f'{fpath} is not a PDF file. Skipping.')
+                    continue
                 try:
-                    doc = pyvips.Image.new_from_file(fpath, dpi=300, n=-1, access="sequential")
-                    if 'n-pages' not in doc.get_fields():
-                        logger.warning('{fpath} does not contain pages. Skipping.')
-                        continue
-                    n_pages = doc.get('n-pages')
-
-                    dest_dict = {'idx': -1, 'src': fpath, 'uuid': None}
-                    for i in range(0, n_pages):
-                        dest_dict['idx'] += 1
-                        dest_dict['uuid'] = f'_{uuid.uuid4()}'
-                        fd, filename = tempfile.mkstemp(suffix='.png')
-                        os.close(fd)
-                        doc = pyvips.Image.new_from_file(fpath, dpi=300, page=i, access="sequential")
-                        logger.info(f'Saving temporary image {fpath}:{dest_dict["idx"]} to {filename}')
-                        doc.write_to_file(filename)
-                        new_input.append((filename, pdf_format.format(**dest_dict) + suffix))
-                        progress.update(pdf_parse_task, advance=1)
-                except pyvips.error.Error:
+                    with pdfium.PdfDocument(fpath) as doc:
+                        dest_dict = {'idx': -1, 'src': fpath, 'uuid': None}
+                        for i in range(n_pages):
+                            dest_dict['idx'] += 1
+                            dest_dict['uuid'] = f'_{uuid.uuid4()}'
+                            fd, filename = tempfile.mkstemp(suffix='.png')
+                            os.close(fd)
+                            page = doc.get_page(i)
+                            try:
+                                bitmap = page.render(scale=pdf_scale)
+                                try:
+                                    logger.info(f'Saving temporary image {fpath}:{dest_dict["idx"]} to {filename}')
+                                    bitmap.to_pil().save(filename)
+                                finally:
+                                    bitmap.close()
+                            finally:
+                                page.close()
+                            new_input.append((filename, pdf_format.format(**dest_dict) + suffix))
+                            progress.update(pdf_parse_task, advance=1)
+                except pdfium.PdfiumError:
                     num_pages -= n_pages
                     progress.update(pdf_parse_task, total=num_pages)
                     logger.warning(f'{fpath} is not a PDF file. Skipping.')

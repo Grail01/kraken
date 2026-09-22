@@ -55,6 +55,49 @@ class TestCLI(unittest.TestCase):
             self.assertEqual(result.exit_code, 1)
 
 
+class TestCLIPDFInput(unittest.TestCase):
+    """
+    Tests for `-f pdf` multi-page PDF extraction (pypdfium2-based).
+    """
+
+    def setUp(self):
+        self.runner = CliRunner()
+
+    def test_pdf_extraction_multi_page(self):
+        """
+        Tests that each page of a multi-page PDF is extracted and processed.
+        """
+        with self.runner.isolated_filesystem():
+            from PIL import ImageDraw
+            page1 = Image.new('RGB', (64, 64), 'white')
+            ImageDraw.Draw(page1).rectangle((8, 8, 56, 56), fill='black')
+            page2 = Image.new('RGB', (64, 64), 'white')
+            ImageDraw.Draw(page2).ellipse((8, 8, 56, 56), fill='black')
+            page1.save('doc.pdf', save_all=True, append_images=[page2])
+            result = self.runner.invoke(cli, ['-f', 'pdf', '-I', 'doc.pdf', '-o', '.png', 'binarize'])
+            self.assertEqual(result.exit_code, 0, msg=result.output)
+            outputs = sorted(Path('.').glob('doc.pdf_*.png'))
+            self.assertEqual(len(outputs), 2)
+            # pages are rasterized at 300dpi; Pillow saves PDFs at 72dpi by
+            # default, so a 64px page comes back scaled by 300/72
+            expected_size = round(64 * 300 / 72)
+            for out in outputs:
+                w, h = Image.open(out).size
+                self.assertAlmostEqual(w, expected_size, delta=1)
+                self.assertAlmostEqual(h, expected_size, delta=1)
+
+    def test_pdf_extraction_invalid_file_skipped(self):
+        """
+        Tests that a non-PDF file passed with `-f pdf` is skipped with a
+        warning rather than raising.
+        """
+        with self.runner.isolated_filesystem():
+            Image.new('RGB', (32, 32), 'white').save('notapdf.pdf')
+            result = self.runner.invoke(cli, ['-f', 'pdf', '-I', 'notapdf.pdf', '-o', '.png', 'binarize'])
+            self.assertEqual(result.exit_code, 0, msg=result.output)
+            self.assertEqual(len(list(Path('.').glob('notapdf.pdf_*.png'))), 0)
+
+
 class TestCLISegmentation(unittest.TestCase):
     """
     Integration tests for the kraken CLI segment subcommand (neural baseline
