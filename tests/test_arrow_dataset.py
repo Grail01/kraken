@@ -2,7 +2,6 @@
 
 import json
 import unittest
-import tempfile
 import pyarrow as pa
 
 from pathlib import Path
@@ -10,6 +9,8 @@ from pytest import fixture
 
 from kraken.lib import xml
 from kraken.lib.arrow_dataset import build_binary_dataset
+
+from helpers import temp_output
 
 thisfile = Path(__file__).resolve().parent
 resources = thisfile / 'resources'
@@ -51,69 +52,69 @@ class TestKrakenArrowCompilation(unittest.TestCase):
         self.box_lines = [resources / '000236.png']
 
     def test_build_path_dataset(self):
-        with tempfile.NamedTemporaryFile() as tmp_file:
+        with temp_output() as tmp_file:
             build_binary_dataset(files=4 * self.box_lines,
-                                 output_file=tmp_file.name,
+                                 output_file=tmp_file,
                                  format_type='path')
-            _validate_ds(self, tmp_file.name, 4, 0, 'kraken_recognition_bbox')
+            _validate_ds(self, tmp_file, 4, 0, 'kraken_recognition_bbox')
 
     def test_build_xml_dataset(self):
-        with tempfile.NamedTemporaryFile() as tmp_file:
+        with temp_output() as tmp_file:
             build_binary_dataset(files=[self.xml],
-                                 output_file=tmp_file.name,
+                                 output_file=tmp_file,
                                  format_type='xml')
-            _validate_ds(self, tmp_file.name, 4, 0, 'kraken_recognition_baseline')
+            _validate_ds(self, tmp_file, 4, 0, 'kraken_recognition_baseline')
 
     def test_build_xml_bbox_dataset(self):
         """
         `--linetype bbox` actually extracts bounding-box crops from XML
         sources (not just relabeling baseline-extracted data).
         """
-        with tempfile.NamedTemporaryFile() as tmp_file:
+        with temp_output() as tmp_file:
             build_binary_dataset(files=[self.xml],
-                                 output_file=tmp_file.name,
+                                 output_file=tmp_file,
                                  format_type='xml',
                                  linetype='bbox')
-            _validate_ds(self, tmp_file.name, 4, 0, 'kraken_recognition_bbox')
+            _validate_ds(self, tmp_file, 4, 0, 'kraken_recognition_bbox')
 
     def test_build_seg_dataset(self):
-        with tempfile.NamedTemporaryFile() as tmp_file:
+        with temp_output() as tmp_file:
             build_binary_dataset(files=[self.seg],
-                                 output_file=tmp_file.name,
+                                 output_file=tmp_file,
                                  format_type=None)
-            _validate_ds(self, tmp_file.name, 4, 0, 'kraken_recognition_baseline')
+            _validate_ds(self, tmp_file, 4, 0, 'kraken_recognition_baseline')
 
     def test_forced_type_dataset(self):
-        with tempfile.NamedTemporaryFile() as tmp_file:
+        with temp_output() as tmp_file:
             build_binary_dataset(files=4 * self.box_lines,
-                                 output_file=tmp_file.name,
+                                 output_file=tmp_file,
                                  format_type='path',
                                  force_type='kraken_recognition_baseline')
-            _validate_ds(self, tmp_file.name, 4, 0, 'kraken_recognition_baseline')
+            _validate_ds(self, tmp_file, 4, 0, 'kraken_recognition_baseline')
 
     def test_build_empty_dataset(self):
         """
         Test that empty lines are retained in compiled dataset.
         """
-        with tempfile.NamedTemporaryFile() as tmp_file:
+        with temp_output() as tmp_file:
             build_binary_dataset(files=[self.xml],
-                                 output_file=tmp_file.name,
+                                 output_file=tmp_file,
                                  format_type='xml',
                                  skip_empty_lines=False)
-            _validate_ds(self, tmp_file.name, 5, 1, 'kraken_recognition_baseline')
+            _validate_ds(self, tmp_file, 5, 1, 'kraken_recognition_baseline')
 
     def test_force_type_mismatch_warning(self):
         """
         Forcing a dataset type that contradicts the actually extracted line
         type logs a warning.
         """
-        with tempfile.NamedTemporaryFile() as tmp_file:
+        with temp_output() as tmp_file:
             build_binary_dataset(files=[self.xml],
-                                 output_file=tmp_file.name,
+                                 output_file=tmp_file,
                                  format_type='xml',
                                  linetype='bbox',
                                  force_type='kraken_recognition_baseline')
-            _validate_ds(self, tmp_file.name, 4, 0, 'kraken_recognition_baseline')
+            _validate_ds(self, tmp_file, 4, 0, 'kraken_recognition_baseline')
         mismatch_warnings = [r for r in self.caplog.records
                              if r.levelname == 'WARNING' and 'Forcing dataset type' in r.message]
         self.assertEqual(len(mismatch_warnings), 1)
@@ -129,12 +130,12 @@ class TestKrakenArrowCompilation(unittest.TestCase):
         """
         # change resource path so it will not resolve
         bad_box_lines = [path.with_name(f"bogus_{path.stem}") for path in self.box_lines]
-        with tempfile.NamedTemporaryFile() as tmp_file:
+        with temp_output() as tmp_file:
             build_binary_dataset(files=bad_box_lines,
-                                 output_file=tmp_file.name,
+                                 output_file=tmp_file,
                                  format_type='xml')
             # expect zero resulting lines due to image load error
-            _validate_ds(self, tmp_file.name, 0, 0, 'kraken_recognition_baseline')
+            _validate_ds(self, tmp_file, 0, 0, 'kraken_recognition_baseline')
         # expect one warning naming the invalid input file
         invalid_warnings = [r for r in self.caplog.records
                             if r.levelname == 'WARNING'

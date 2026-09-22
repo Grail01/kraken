@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import copy
-import tempfile
 import unittest
 import uuid
 from collections import Counter
@@ -11,7 +10,7 @@ import numpy as np
 from hocr_spec import HocrValidator
 from lxml import etree
 
-from helpers import load_segmentation
+from helpers import load_segmentation, temp_output
 
 from kraken import containers, serialization
 from kraken.lib import xml
@@ -27,10 +26,11 @@ def roundtrip(self, records, fp):
     Checks that the order of lines after serialization and deserialization is
     equal to the records.
     """
-    with tempfile.NamedTemporaryFile() as out:
+    with temp_output() as out_name:
         fp.seek(0)
-        out.write(fp.getvalue().encode('utf-8'))
-        doc = xml.XMLPage(out.name).to_container().lines
+        with open(out_name, 'wb') as out:
+            out.write(fp.getvalue().encode('utf-8'))
+        doc = xml.XMLPage(out_name).to_container().lines
         for orig_line, parsed_line in zip(records, doc):
             self.assertSequenceEqual(np.array(orig_line.baseline).tolist(),
                                      np.array(parsed_line.baseline).tolist(),

@@ -86,12 +86,12 @@ class TestLoadModels(unittest.TestCase):
         """
         with tempfile.NamedTemporaryFile(delete=False, suffix='.bin') as fp:
             fp.write(b'invalid data')
-            fp.flush()
-            try:
-                with raises(ValueError):
-                    load_models(fp.name)
-            finally:
-                os.unlink(fp.name)
+            tmp_path = fp.name
+        try:
+            with raises(ValueError):
+                load_models(tmp_path)
+        finally:
+            os.unlink(tmp_path)
 
     def test_load_models_nonexistent_file(self):
         """

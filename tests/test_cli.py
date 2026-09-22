@@ -1,6 +1,5 @@
 # -*- coding: utf-8 -*-
 import json
-import tempfile
 import unittest
 from pathlib import Path
 
@@ -30,28 +29,28 @@ class TestCLI(unittest.TestCase):
         """
         Tests binarization of color images.
         """
-        with tempfile.NamedTemporaryFile() as fp:
-            result = self.runner.invoke(cli, ['-i', self.color_img, fp.name, 'binarize'])
+        with temp_output() as fname:
+            result = self.runner.invoke(cli, ['-i', self.color_img, fname, 'binarize'])
             self.assertEqual(result.exit_code, 0)
-            self.assertEqual(tuple(map(lambda x: x[1], Image.open(fp).getcolors())), (0, 255))
+            self.assertEqual(tuple(map(lambda x: x[1], Image.open(fname).getcolors())), (0, 255))
 
     def test_binarize_bw(self):
         """
         Tests binarization of b/w images.
         """
-        with tempfile.NamedTemporaryFile() as fp:
-            result = self.runner.invoke(cli, ['-i', self.bw_img, fp.name, 'binarize'])
+        with temp_output() as fname:
+            result = self.runner.invoke(cli, ['-i', self.bw_img, fname, 'binarize'])
             self.assertEqual(result.exit_code, 0)
             bw = np.array(Image.open(self.bw_img))
-            new = np.array(Image.open(fp.name))
+            new = np.array(Image.open(fname))
             self.assertTrue(np.all(bw == new))
 
     def test_segment_color(self):
         """
         Tests that segmentation is aborted when given color image.
         """
-        with tempfile.NamedTemporaryFile() as fp:
-            result = self.runner.invoke(cli, ['-r', '-i', self.color_img, fp.name, 'segment'])
+        with temp_output() as fname:
+            result = self.runner.invoke(cli, ['-r', '-i', self.color_img, fname, 'segment'])
             self.assertEqual(result.exit_code, 1)
 
 
